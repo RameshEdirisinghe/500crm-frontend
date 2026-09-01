@@ -76,7 +76,15 @@ export const MemberDashboard: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const currentTeamId = user.teamId || 'team_001';
+      const currentTeamId = user.teamId;
+      if (!currentTeamId) {
+        setContacts([]);
+        setCallLogs([]);
+        setOrders([]);
+        setSalesTargets([]);
+        setLeaderboard([]);
+        return;
+      }
       const now = new Date();
       const targetYear = now.getFullYear();
       const targetMonthIndex = selectedMonthPreset === 'THIS_MONTH' ? now.getMonth() : now.getMonth() - 1;
@@ -98,7 +106,7 @@ export const MemberDashboard: React.FC = () => {
 
       // Build Leaderboard Roster ranked by Delivered Orders (1.2)
       const membersOnly = allUsers.filter(
-        (u) => u.role === 'TEAM_MEMBER' && (u.teamId === currentTeamId || !u.teamId || currentTeamId === 'team_001')
+        (u) => u.role === 'TEAM_MEMBER' && u.teamId === currentTeamId
       );
 
       const computedRoster: LeaderboardMember[] = membersOnly.slice(0, 7).map((u) => {
@@ -187,7 +195,7 @@ export const MemberDashboard: React.FC = () => {
   const scopedCompletionPercentage = scopedAssignedCount > 0 ? Math.min(100, Math.round((scopedCompletedCallsCount / scopedAssignedCount) * 100)) : 0;
 
   // Dynamic Sales Goal & Allowance calculation
-  const currentTeamId = user?.teamId || 'team_001';
+  const currentTeamId = user?.teamId || '';
   const activeTarget = salesTargets.find((t) => t.teamId === currentTeamId) || salesTargets[0];
   const targetGoal = activeTarget ? activeTarget.targetAmount : 500000;
   const activeTiers = activeTarget?.tiers && activeTarget.tiers.length > 0 ? activeTarget.tiers : [
@@ -243,14 +251,14 @@ export const MemberDashboard: React.FC = () => {
               leftIcon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
               onClick={() => navigate('/member/sales')}
             >
-              My Sales & Fulfillment
+              My Sales
             </Button>
             <Button
               variant="primary"
               leftIcon={<PhoneCall className="w-4 h-4" />}
               onClick={() => navigate('/member/contacts')}
             >
-              Start Calling Queue
+              Start Calling
             </Button>
           </div>
         }

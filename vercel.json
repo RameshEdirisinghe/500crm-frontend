@@ -1,5 +1,5 @@
 {
-  "$schema": "https://openapi.vercel.com/vercel.json",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -15,8 +15,8 @@
       "source": "/api/:path*",
       "headers": [
         {
-          "key": "x-vercel-enable-rewrite-caching",
-          "value": "0"
+          "key": "Cache-Control",
+          "value": "no-store"
         }
       ]
     }

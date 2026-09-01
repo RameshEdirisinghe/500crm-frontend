@@ -481,7 +481,16 @@ export const MemberFollowUpsPage: React.FC = () => {
                     </div>
 
                     {/* Right side: Status Badge + Update Remarks Button */}
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          log.direction === 'INBOUND'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}
+                      >
+                        {log.direction === 'INBOUND' ? 'Inbound' : 'Outbound'}
+                      </span>
                       <StatusBadge type="contact" status={log.status} />
 
                       {/* Update Remarks Icon Button */}

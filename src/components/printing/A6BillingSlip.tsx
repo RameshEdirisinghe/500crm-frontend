@@ -7,7 +7,7 @@ export interface A6BillingSlipProps {
   customer: Customer;
   responsibleUser?: User;
   order?: Order;
-  team?: Team | Pick<Team, 'id' | 'name' | 'code'>;
+  team?: Team;
   className?: string;
 }
 
@@ -45,14 +45,10 @@ const SlipField: React.FC<{
 
 const SlipHeader: React.FC<{ brand: BrandPrintConfig }> = ({ brand }) => (
   <div className="h-[26mm] border-b-[0.55mm] border-[#000000] flex items-center justify-between px-[5mm] py-[2.5mm] overflow-hidden bg-[#FFFFFF]">
-    {/* Logo Container */}
     <div className="flex items-center justify-start max-w-[42mm] h-full pl-[1mm]">
-      <img
-        src={brand.logo}
-        alt={`${brand.displayName} logo`}
-        className="max-w-[38mm] max-h-[19mm] object-contain"
-        style={{ display: 'block' }}
-      />
+      <div className="text-[18px] font-black leading-tight text-[#000000] uppercase" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+        {brand.printTitle}
+      </div>
     </div>
     {/* Business Info Container */}
     <div className="text-right flex-1 pl-[4mm] pr-[1mm] flex flex-col justify-center h-full">
@@ -86,7 +82,7 @@ export const A6BillingSlip: React.FC<A6BillingSlipProps> = ({
   team,
   className = '',
 }) => {
-  const brand = getBrandPrintConfig(team || order?.teamId || customer.teamId);
+  const brand = getBrandPrintConfig(team || order?.team || customer.team);
 
   if (!brand) {
     return <UnresolvedBrandSlip className={className} />;

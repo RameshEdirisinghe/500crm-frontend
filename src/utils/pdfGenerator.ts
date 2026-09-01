@@ -84,15 +84,11 @@ const resolvePrintItems = (items: LeadPrintItem[]): PrintReadyItem[] => {
     }
 
     const orderTeam = item.order?.team;
-    const brandIdentity = item.team || orderTeam || item.order?.teamId || item.customer.teamId;
+    const brandIdentity = item.team || orderTeam || item.customer.team;
     const brand = getBrandPrintConfig(brandIdentity);
 
     if (!brand) {
       throw new Error(`Brand could not be resolved for order ${orderLabel}.`);
-    }
-
-    if (!brand.logo) {
-      throw new Error(`Logo is missing for ${brand.displayName} on order ${orderLabel}.`);
     }
 
     if (!item.customer.fullName || !item.customer.address || !item.customer.phone) {

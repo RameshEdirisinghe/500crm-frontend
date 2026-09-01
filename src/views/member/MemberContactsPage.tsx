@@ -10,7 +10,8 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { PostCallModal } from '../../components/calling/PostCallModal';
 import { AddPersonalNumberModal } from '../../components/calling/AddPersonalNumberModal';
-import { Clock, PhoneCall, RotateCcw, Star, MapPin, UserCheck, PlusCircle, Hash } from 'lucide-react';
+import { InboundCallbackDialog } from '../../components/calling/InboundCallbackDialog';
+import { Clock, PhoneCall, RotateCcw, Star, MapPin, UserCheck, PlusCircle, Hash, PhoneIncoming } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -59,7 +60,9 @@ export const MemberContactsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabCategory>('NEW'); // Default is New
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedDirection, setSelectedDirection] = useState<'OUTBOUND' | 'INBOUND'>('OUTBOUND');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isInboundModalOpen, setIsInboundModalOpen] = useState(false);
 
   const loadContacts = async () => {
     if (!user) return;
@@ -74,6 +77,12 @@ export const MemberContactsPage: React.FC = () => {
 
   useEffect(() => {
     loadContacts();
+
+    const handleExternalUpdate = () => {
+      loadContacts();
+    };
+    window.addEventListener('crm:contact-updated', handleExternalUpdate);
+    return () => window.removeEventListener('crm:contact-updated', handleExternalUpdate);
   }, [user]);
 
   const handleToggleFollowUp = async (contact: Contact, e: React.MouseEvent) => {
@@ -148,12 +157,13 @@ export const MemberContactsPage: React.FC = () => {
         description="Browse assigned leads by status category, filter follow-ups, and launch calling queue"
         actions={
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
-            leftIcon={<PlusCircle className="w-4 h-4" />}
-            onClick={() => setIsAddModalOpen(true)}
+            leftIcon={<PhoneIncoming className="w-4 h-4 text-emerald-600" />}
+            onClick={() => setIsInboundModalOpen(true)}
+            className="border-emerald-200 hover:bg-emerald-50 text-emerald-800 font-semibold"
           >
-            Add Mobile Number
+            Inbound Callback
           </Button>
         }
       />
@@ -346,7 +356,10 @@ export const MemberContactsPage: React.FC = () => {
                 variant="primary"
                 size="sm"
                 leftIcon={<PhoneCall className="w-3.5 h-3.5" />}
-                onClick={() => setSelectedContact(contact)}
+                onClick={() => {
+                  setSelectedDirection('OUTBOUND');
+                  setSelectedContact(contact);
+                }}
                 className="shrink-0"
               >
                 Call
@@ -363,14 +376,29 @@ export const MemberContactsPage: React.FC = () => {
           onClose={() => setSelectedContact(null)}
           contact={selectedContact}
           onSuccess={loadContacts}
+          initialDirection={selectedDirection}
         />
       )}
+
+      {/* Inbound Callback Dialog */}
+      <InboundCallbackDialog
+        isOpen={isInboundModalOpen}
+        onClose={() => setIsInboundModalOpen(false)}
+        onSelectContactForCallback={(contact) => {
+          setSelectedDirection('INBOUND');
+          setSelectedContact(contact);
+        }}
+      />
 
       {/* Add Personal Number Modal */}
       <AddPersonalNumberModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={loadContacts}
+        onOpenExistingCallback={(contact) => {
+          setSelectedDirection('INBOUND');
+          setSelectedContact(contact);
+        }}
       />
     </div>
   );

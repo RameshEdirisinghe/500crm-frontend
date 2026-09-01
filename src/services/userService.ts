@@ -44,7 +44,12 @@ export class UserService {
     updates: Partial<User>,
     actor: User
   ): Promise<User> {
-    const updated = await userRepository.update(id, updates);
+    let updated: User;
+    if (id === actor.id) {
+      updated = await userRepository.updateMe(updates);
+    } else {
+      updated = await userRepository.update(id, updates);
+    }
 
     await ActivityLogService.logAction({
       userId: actor.id,

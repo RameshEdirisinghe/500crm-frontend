@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import type { Product, Team, Order, StockActivityLog, Customer } from '../../models/domain';
-import { productRepository, teamRepository, orderRepository, stockActivityLogRepository, customerRepository } from '../../repositories';
+import {
+  productRepository,
+  teamRepository,
+  orderRepository,
+  stockActivityLogRepository,
+  customerRepository,
+  approvalRequestRepository,
+} from '../../repositories';
 import { getTeamBranding } from '../../config/branding';
 import { formatCurrency } from '../../utils/currency';
 import { PageHeader } from '../../components/shared/PageHeader';
@@ -18,6 +25,7 @@ import toast from 'react-hot-toast';
 import {
   Package,
   Plus,
+  PlusCircle,
   Edit2,
   AlertTriangle,
   Layers,
@@ -35,6 +43,7 @@ import {
   Calendar,
   UserCheck,
   FileText,
+  Zap,
 } from 'lucide-react';
 
 export interface DamageAuditRecord {
@@ -74,14 +83,27 @@ export const AdminProductsPage: React.FC = () => {
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Form Fields
+  // Bulk Multi-Product Stock Addition Modal (Direct Admin)
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkTeamId, setBulkTeamId] = useState<string>('');
+  const [bulkQuantities, setBulkQuantities] = useState<Record<string, number>>({});
+  const [bulkBatchCosts, setBulkBatchCosts] = useState<Record<string, number | string>>({});
+  const [bulkProposedPrices, setBulkProposedPrices] = useState<Record<string, number | string>>({});
+  const [bulkPricingModes, setBulkPricingModes] = useState<Record<string, 'GLOBAL' | 'BATCH_SPECIFIC'>>({});
+  const [bulkSupplier, setBulkSupplier] = useState<string>('');
+  const [bulkReason, setBulkReason] = useState<string>('');
+  const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+  const [confirmingBulkSubmit, setConfirmingBulkSubmit] = useState(false);
+
+  // Form Fields for Add/Edit Product
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [formTeamId, setFormTeamId] = useState('team_001');
+  const [formTeamId, setFormTeamId] = useState('');
   const [category, setCategory] = useState('Supplements');
   const [costPrice, setCostPrice] = useState<number | string>(2500);
   const [sellingPrice, setSellingPrice] = useState<number | string>(5000);
   const [minStockThreshold, setMinStockThreshold] = useState<number | string>(10);
+  const [initialStock, setInitialStock] = useState<number | string>(0);
   const [editCurrentStock, setEditCurrentStock] = useState<number>(0);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,7 +118,7 @@ export const AdminProductsPage: React.FC = () => {
       ]);
       setProducts(allProducts);
       setTeams(allTeams);
-      if (allTeams.length > 0 && formTeamId === 'team_001') {
+      if (allTeams.length > 0 && !formTeamId) {
         setFormTeamId(allTeams[0].id);
       }
     } catch (err: any) {
@@ -115,11 +137,12 @@ export const AdminProductsPage: React.FC = () => {
     setEditingProduct(null);
     setName('');
     setCode(`PROD-${Math.floor(100 + Math.random() * 900)}`);
-    setFormTeamId(teams[0]?.id || 'team_001');
+    setFormTeamId(selectedTeamId !== 'ALL' ? selectedTeamId : teams[0]?.id || '');
     setCategory('Supplements');
     setCostPrice(2500);
     setSellingPrice(5000);
     setMinStockThreshold(10);
+    setInitialStock(0);
     setIsModalOpen(true);
   };
 
@@ -132,17 +155,109 @@ export const AdminProductsPage: React.FC = () => {
     setCostPrice(p.costPrice);
     setSellingPrice(p.sellingPrice);
     setMinStockThreshold(p.minStockThreshold);
+    setInitialStock(0);
     setEditCurrentStock(p.currentStock);
     setIsModalOpen(true);
   };
 
-  // Submit Handler
+  // Bulk Stock Modal Trigger & Helper
+  const initBulkForm = (tId: string) => {
+    const teamProds = products.filter((p) => p.teamId === tId);
+    const initialQty: Record<string, number> = {};
+    const initialCosts: Record<string, number | string> = {};
+    const initialPrices: Record<string, number | string> = {};
+    const initialModes: Record<string, 'GLOBAL' | 'BATCH_SPECIFIC'> = {};
+
+    teamProds.forEach((p) => {
+      initialQty[p.id] = 0;
+      initialCosts[p.id] = p.costPrice;
+      initialPrices[p.id] = p.sellingPrice;
+      initialModes[p.id] = 'GLOBAL';
+    });
+
+    setBulkQuantities(initialQty);
+    setBulkBatchCosts(initialCosts);
+    setBulkProposedPrices(initialPrices);
+    setBulkPricingModes(initialModes);
+    setBulkSupplier('');
+    setBulkReason('');
+  };
+
+  const openBulkModal = () => {
+    const targetTeamId = selectedTeamId !== 'ALL' ? selectedTeamId : teams[0]?.id || '';
+    setBulkTeamId(targetTeamId);
+    initBulkForm(targetTeamId);
+    setIsBulkModalOpen(true);
+  };
+
+  const handleBulkTeamChange = (newTeamId: string) => {
+    setBulkTeamId(newTeamId);
+    initBulkForm(newTeamId);
+  };
+
+  // Bulk Stock Addition Submit (Direct Admin - No Approval Needed)
+  const handleBulkStockAddition = async () => {
+    if (!user || !bulkTeamId) return;
+
+    const teamProds = products.filter((p) => p.teamId === bulkTeamId);
+    const itemsToAdd = teamProds
+      .filter((p) => (bulkQuantities[p.id] || 0) > 0)
+      .map((p) => {
+        const rawCost = bulkBatchCosts[p.id] !== undefined && bulkBatchCosts[p.id] !== '' ? Number(bulkBatchCosts[p.id]) : p.costPrice;
+        const rawPrice = bulkProposedPrices[p.id] !== undefined && bulkProposedPrices[p.id] !== '' ? Number(bulkProposedPrices[p.id]) : p.sellingPrice;
+
+        return {
+          productId: p.id,
+          productName: p.name,
+          quantity: Number(bulkQuantities[p.id]),
+          unitCostPrice: rawCost,
+          proposedSellingPrice: rawPrice,
+          pricingMode: bulkPricingModes[p.id] || 'GLOBAL',
+          oldStock: Number(p.currentStock),
+          newStock: Number(p.currentStock + bulkQuantities[p.id]),
+        };
+      });
+
+    if (itemsToAdd.length === 0) {
+      toast.error('Please enter additional stock quantity for at least one product.');
+      return;
+    }
+
+    setIsSubmittingBulk(true);
+    try {
+      const totalQty = itemsToAdd.reduce((sum, item) => sum + item.quantity, 0);
+
+      await approvalRequestRepository.create({
+        requestType: 'STOCK_ADDITION',
+        requestedById: user.id,
+        requestedByName: user.fullName || 'Admin',
+        teamId: bulkTeamId,
+        productId: itemsToAdd[0]?.productId || (undefined as any),
+        productName: `Bulk Admin Stock Addition (${itemsToAdd.length} Products, +${totalQty} Units)`,
+        items: itemsToAdd,
+        quantity: totalQty,
+        supplierName: bulkSupplier.trim() || undefined,
+        reason: bulkReason.trim() || `Admin direct bulk stock addition for ${itemsToAdd.length} products (+${totalQty} units total)`,
+      });
+
+      toast.success(`Successfully added bulk stock (+${totalQty} units total across ${itemsToAdd.length} products). Stock updated immediately.`);
+      setIsBulkModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to submit bulk stock.');
+    } finally {
+      setIsSubmittingBulk(false);
+    }
+  };
+
+  // Submit Handler for Add/Edit Product Definition
   const handleSubmit = async () => {
     if (!name.trim() || !code.trim() || !user) return;
 
     const parsedCost = Number(costPrice) || 0;
     const parsedSelling = Number(sellingPrice) || 0;
     const parsedThreshold = Number(minStockThreshold) || 10;
+    const initQty = Number(initialStock) || 0;
 
     if (parsedCost < 0 || parsedSelling < 0) {
       toast.error('Prices must be positive values.');
@@ -168,14 +283,18 @@ export const AdminProductsPage: React.FC = () => {
           code: code.trim(),
           teamId: formTeamId,
           category: category.trim() || 'General',
-          currentStock: 0, // Initial stock is 0 units as requested
+          currentStock: initQty,
           minStockThreshold: parsedThreshold,
           costPrice: parsedCost,
           sellingPrice: parsedSelling,
           isActive: true,
         });
         const assignedTeam = teams.find((t) => t.id === formTeamId)?.name || formTeamId;
-        toast.success(`Created new product "${name}" assigned to ${assignedTeam}`);
+        toast.success(
+          initQty > 0
+            ? `Created new product "${name}" for ${assignedTeam} with ${initQty} units initial stock!`
+            : `Created new product "${name}" assigned to ${assignedTeam}`
+        );
       }
       setIsModalOpen(false);
       loadData();
@@ -263,9 +382,19 @@ export const AdminProductsPage: React.FC = () => {
         title="Product Inventory Management"
         description="Add product definitions, configure selling & cost prices, and monitor real-time stock levels team-wise"
         actions={
-          <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={openAddModal}>
-            Add New Product
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="secondary"
+              leftIcon={<Boxes className="w-4 h-4 text-emerald-600" />}
+              onClick={openBulkModal}
+              className="bg-white border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-semibold shadow-2xs"
+            >
+              Bulk Add Stock
+            </Button>
+            <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={openAddModal} className="text-xs font-semibold">
+              Add New Product
+            </Button>
+          </div>
         }
       />
 
@@ -464,7 +593,7 @@ export const AdminProductsPage: React.FC = () => {
                     const isOutOfStock = p.currentStock === 0;
                     const isLow = p.currentStock > 0 && p.currentStock <= p.minStockThreshold;
                     const teamInfo = teams.find((t) => t.id === p.teamId);
-                    const brand = getTeamBranding(p.teamId);
+                    const brand = getTeamBranding(p.team || teamInfo);
                     const marginPct =
                       p.sellingPrice > 0
                         ? (((p.sellingPrice - p.costPrice) / p.sellingPrice) * 100).toFixed(1)
@@ -694,12 +823,26 @@ export const AdminProductsPage: React.FC = () => {
             />
           </div>
 
+          {/* Initial Stock Input for New Product */}
+          {!editingProduct && (
+            <div>
+              <Input
+                label="Initial Stock on Hand (Units)"
+                type="number"
+                min="0"
+                value={initialStock}
+                onChange={(e) => setInitialStock(e.target.value)}
+                helperText="Initial batch quantity immediately credited to inventory (defaults to 0)"
+              />
+            </div>
+          )}
+
           {/* Stock Notice Banner */}
           {!editingProduct ? (
             <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
-              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <Zap className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <strong className="font-semibold">Initial Stock:</strong> New product is created with <strong>0 units</strong> on hand. Stock inventory is added by Supervisors submitting Stock Addition requests or Admin Approvals.
+                <strong className="font-semibold">Direct Stock Management:</strong> As an Administrator, any initial stock or subsequent stock additions are added and applied directly to inventory without requiring an approval queue.
               </div>
             </div>
           ) : (
@@ -911,6 +1054,156 @@ export const AdminProductsPage: React.FC = () => {
           isLoading={isDeleting}
         />
       )}
+
+      {/* Direct Bulk Stock Addition Modal (Admin) */}
+      <Dialog
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        title="Bulk Stock Addition (Direct Admin)"
+        description="Add inventory lots for multiple products simultaneously without waiting for an approval queue."
+        maxWidth="4xl"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setConfirmingBulkSubmit(true);
+          }}
+          className="space-y-4"
+        >
+          {/* Direct Admin Callout */}
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900">
+            <Zap className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-semibold">Direct Administrator Execution:</strong> All entered stock additions will immediately create active stock batches and update inventory balances across selected products.
+            </div>
+          </div>
+
+          {/* Team Brand Selector */}
+          <div>
+            <Select
+              label="Select Team Brand *"
+              value={bulkTeamId}
+              onChange={(e) => handleBulkTeamChange(e.target.value)}
+              options={teams.map((t) => ({
+                value: t.id,
+                label: `${t.name} (${t.code})`,
+              }))}
+            />
+          </div>
+
+          {/* Bulk Products Table */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[340px] overflow-y-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600 sticky top-0 z-10">
+                <tr>
+                  <th className="py-2.5 px-3 w-[30%]">Product &amp; Code</th>
+                  <th className="py-2.5 px-2 text-center w-[12%]">Current Stock</th>
+                  <th className="py-2.5 px-2 w-[18%]">Add Quantity *</th>
+                  <th className="py-2.5 px-2 w-[20%]">Unit Cost (LKR)</th>
+                  <th className="py-2.5 px-2 w-[20%]">Selling Price (LKR)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {products.filter((p) => p.teamId === bulkTeamId).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">
+                      No products registered for this team brand.
+                    </td>
+                  </tr>
+                ) : (
+                  products
+                    .filter((p) => p.teamId === bulkTeamId)
+                    .map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="py-2 px-3">
+                          <div className="font-bold text-slate-900">{p.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{p.code}</div>
+                        </td>
+                        <td className="py-2 px-2 text-center font-mono font-bold text-slate-700">
+                          {p.currentStock}
+                        </td>
+                        <td className="py-2 px-2">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={bulkQuantities[p.id] || ''}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setBulkQuantities((prev) => ({ ...prev, [p.id]: val }));
+                            }}
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 font-mono font-bold"
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={bulkBatchCosts[p.id] !== undefined ? bulkBatchCosts[p.id] : p.costPrice}
+                            onChange={(e) => {
+                              setBulkBatchCosts((prev) => ({ ...prev, [p.id]: e.target.value }));
+                            }}
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 font-mono"
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={bulkProposedPrices[p.id] !== undefined ? bulkProposedPrices[p.id] : p.sellingPrice}
+                            onChange={(e) => {
+                              setBulkProposedPrices((prev) => ({ ...prev, [p.id]: e.target.value }));
+                            }}
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 font-mono"
+                          />
+                        </td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Supplier / Source Reference"
+              placeholder="e.g. Global Supplies Ltd"
+              value={bulkSupplier}
+              onChange={(e) => setBulkSupplier(e.target.value)}
+            />
+            <Input
+              label="Batch Notes / Reason"
+              placeholder="e.g. Bulk shipment arrival"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button type="button" variant="secondary" onClick={() => setIsBulkModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" leftIcon={<Zap className="w-4 h-4" />} isLoading={isSubmittingBulk}>
+              Commit Bulk Stock Directly
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Confirmation Dialog: Bulk Stock Addition */}
+      <ConfirmDialog
+        isOpen={confirmingBulkSubmit}
+        onClose={() => setConfirmingBulkSubmit(false)}
+        onConfirm={() => {
+          setConfirmingBulkSubmit(false);
+          handleBulkStockAddition();
+        }}
+        title="Confirm Bulk Stock Addition"
+        message="Are you sure you want to commit stock for all specified products? Stock inventory will be updated immediately."
+        confirmText="Confirm & Commit Bulk Stock"
+      />
     </div>
   );
 };

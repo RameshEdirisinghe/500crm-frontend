@@ -65,7 +65,7 @@ export const SupervisorCustomerDetailPage: React.FC = () => {
   if (loading) return <LoadingState rows={8} />;
   if (!customer) return <div className="p-6 text-center text-slate-500">Customer record not found.</div>;
 
-  const teamBrand = getTeamBranding(user?.teamId === customer.teamId ? user.team || customer.teamId : customer.teamId);
+  const teamBrand = getTeamBranding(user?.teamId === customer.teamId ? user.team || customer.team : customer.team);
 
   return (
     <div className="space-y-6">

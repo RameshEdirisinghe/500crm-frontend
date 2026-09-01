@@ -217,27 +217,43 @@ export class ContactService {
       }
 
       const isMember = actor.role === 'TEAM_MEMBER';
-      const now = new Date().toISOString();
-      const contactsToCreate = totalToImport.map((phone) => ({
-        phone,
-        code: batchCode?.trim() || undefined,
-        status: 'NEW' as const,
-        teamId: actor.teamId!,
-        importedAt: now,
-        importedBy: actor.id,
-        importBatchId: batchId,
-        isAllocated: isMember,
-        allocatedToId: isMember ? actor.id : null,
-        allocatedAt: isMember ? now : null,
-        allocationBatchId: isMember ? batchId : null,
-        isSelfAdded: isMember,
-        addedBy: isMember ? actor.id : undefined,
-        allocationSource: (isMember ? 'SELF_ADDED' : undefined) as any,
-        attemptCount: 0,
-        lastCalledAt: null,
-      }));
+      let created: Contact[];
 
-      const created = await contactRepository.createMany(contactsToCreate);
+      if (isMember) {
+        // Team Members do not have the 'contacts.import' permission for the bulk endpoint.
+        // We use the personal contact addition endpoint which is allowed.
+        created = await Promise.all(
+          totalToImport.map((phone) =>
+            contactRepository.addPersonalNumber({
+              phone,
+              memberId: actor.id,
+              teamId: actor.teamId!,
+              code: batchCode?.trim() || undefined,
+            })
+          )
+        );
+      } else {
+        const now = new Date().toISOString();
+        const contactsToCreate = totalToImport.map((phone) => ({
+          phone,
+          code: batchCode?.trim() || undefined,
+          status: 'NEW' as const,
+          teamId: actor.teamId!,
+          importedAt: now,
+          importedBy: actor.id,
+          importBatchId: batchId,
+          isAllocated: false,
+          allocatedToId: null,
+          allocatedAt: null,
+          allocationBatchId: null,
+          isSelfAdded: false,
+          addedBy: undefined,
+          allocationSource: undefined,
+          attemptCount: 0,
+          lastCalledAt: null,
+        }));
+        created = await contactRepository.createMany(contactsToCreate);
+      }
 
       await ActivityLogService.logAction({
         userId: actor.id,

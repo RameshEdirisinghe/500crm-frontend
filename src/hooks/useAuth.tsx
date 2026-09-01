@@ -6,7 +6,10 @@ import React, {
   ReactNode,
 } from "react";
 import { User, UserRole } from "../models/domain";
-import { AuthService } from "../services/authService";
+import {
+  AuthService,
+  SessionCookieNotEstablishedError,
+} from "../services/authService";
 import { AUTH_EXPIRED_EVENT } from "../lib/apiClient";
 import toast from "react-hot-toast";
 
@@ -76,9 +79,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setStatus("unauthenticated");
       const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Login failed. Check your credentials.";
+        err instanceof SessionCookieNotEstablishedError
+          ? "Login was accepted, but this browser did not keep the secure session. Please refresh and try again."
+          : err?.response?.data?.message ||
+            err?.message ||
+            "Login failed. Check your credentials.";
       toast.error(message);
       throw err;
     }

@@ -5,6 +5,7 @@ import apiClient from '../lib/apiClient';
 export interface SubmitCallResultInput {
   contactId: string;
   status: ContactStatus;
+  direction?: 'OUTBOUND' | 'INBOUND';
   customerName?: string;
   customerAddress?: string;
   city?: string;

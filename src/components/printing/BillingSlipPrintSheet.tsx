@@ -6,7 +6,7 @@ export interface LeadPrintItem {
   customer: Customer;
   responsibleUser?: User;
   order?: Order;
-  team?: Team | Pick<Team, 'id' | 'name' | 'code'>;
+  team?: Team;
 }
 
 export interface BillingSlipPrintSheetProps {

@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { env } from "../config/env";
 
-const BASE_URL = "/api/v1";
 export const AUTH_EXPIRED_EVENT = "crm-auth-expired";
 
 declare module "axios" {
@@ -10,7 +10,7 @@ declare module "axios" {
 }
 
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: env.apiBaseUrl,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -28,9 +28,9 @@ type RetriableRequestConfig = InternalAxiosRequestConfig & {
 const getPathname = (url?: string): string => {
   if (!url) return "";
   try {
-    const base = BASE_URL.startsWith("http")
-      ? BASE_URL
-      : `${window.location.origin}${BASE_URL.startsWith("/") ? "" : "/"}${BASE_URL}`;
+    const base = env.apiBaseUrl.startsWith("http")
+      ? env.apiBaseUrl
+      : `${window.location.origin}${env.apiBaseUrl.startsWith("/") ? "" : "/"}${env.apiBaseUrl}`;
     return new URL(url, base).pathname;
   } catch {
     return url;
@@ -61,6 +61,30 @@ const refreshSession = async (): Promise<void> => {
   markAuthRecovered();
 };
 
+const logAuthNetworkDiagnostic = (error: AxiosError, context: string) => {
+  if (import.meta.env.PROD) return;
+
+  const url = error.config?.url;
+  const status = error.response?.status;
+  const category =
+    !error.response && error.request
+      ? "NETWORK_ERROR"
+      : status === 401
+        ? "UNAUTHORIZED"
+        : status === 403
+          ? "FORBIDDEN"
+          : "API_ERROR";
+
+  console.debug("[auth]", {
+    category,
+    context,
+    status,
+    url,
+    baseURL: error.config?.baseURL,
+    message: error.message,
+  });
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -88,9 +112,16 @@ apiClient.interceptors.response.use(
         await refreshPromise;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        if (axios.isAxiosError(refreshError)) {
+          logAuthNetworkDiagnostic(refreshError, "refresh");
+        }
         notifyAuthExpired();
         return Promise.reject(refreshError);
       }
+    }
+
+    if (isAuthEndpoint(originalRequest.url) || error.response?.status === 401) {
+      logAuthNetworkDiagnostic(error, "response");
     }
 
     return Promise.reject(error);

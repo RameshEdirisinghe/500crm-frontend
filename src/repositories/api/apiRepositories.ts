@@ -92,8 +92,9 @@ export class ApiUserRepository implements IUserRepository {
     return all.filter((u) => u.role === role);
   }
   async getByTeamId(teamId: string): Promise<User[]> {
-    const all = await this.getAll();
-    return all.filter((u) => u.teamId === teamId);
+    return unwrap(
+      await apiClient.get<{ data: User[] }>(`/users/leaderboard?teamId=${teamId}`)
+    );
   }
   async getBySupervisorId(supervisorId: string): Promise<User[]> {
     const all = await this.getAll();
@@ -152,6 +153,16 @@ export class ApiUserRepository implements IUserRepository {
     if (updates.password !== undefined && updates.password.trim() !== '') payload.password = updates.password;
 
     return unwrap(await apiClient.patch<{ data: User }>(`/users/${id}`, payload));
+  }
+  async updateMe(updates: Partial<User>): Promise<User> {
+    const payload: Record<string, any> = {};
+    if (updates.fullName !== undefined) payload.fullName = updates.fullName;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.avatarUrl !== undefined) payload.avatarUrl = updates.avatarUrl;
+    if (updates.dateOfBirth !== undefined) payload.dateOfBirth = updates.dateOfBirth ? updates.dateOfBirth.split('T')[0] : undefined;
+    if (updates.password !== undefined && updates.password.trim() !== '') payload.password = updates.password;
+
+    return unwrap(await apiClient.patch<{ data: User }>('/users/me', payload));
   }
   async disable(id: string): Promise<void> {
     await apiClient.patch(`/users/${id}/status`, { isActive: false });

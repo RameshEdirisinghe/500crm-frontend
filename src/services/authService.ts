@@ -1,3 +1,4 @@
+import axios from "axios";
 import apiClient, { markAuthRecovered } from "../lib/apiClient";
 import { User } from "../models/domain";
 
@@ -11,6 +12,16 @@ interface RefreshResponse {
   data: {
     user: User;
   };
+}
+
+export class SessionCookieNotEstablishedError extends Error {
+  constructor(cause: unknown) {
+    super(
+      "Login succeeded, but the browser did not establish the session cookie.",
+    );
+    this.name = "SessionCookieNotEstablishedError";
+    this.cause = cause;
+  }
 }
 
 export class AuthService {
@@ -28,7 +39,24 @@ export class AuthService {
       { skipAuthRefresh: true },
     );
 
-    const user = await this.getCurrentUser();
+    let user: User;
+    try {
+      user = await this.getCurrentUser();
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        if (import.meta.env.DEV) {
+          console.debug("[auth]", {
+            category: "SESSION_COOKIE_NOT_ESTABLISHED",
+            loginStatus: 200,
+            meStatus: 401,
+            apiBaseUrl: apiClient.defaults.baseURL,
+          });
+        }
+        throw new SessionCookieNotEstablishedError(error);
+      }
+      throw error;
+    }
+
     markAuthRecovered();
     return user;
   }

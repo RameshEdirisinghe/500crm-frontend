@@ -121,7 +121,10 @@ export const SupervisorStockPage: React.FC = () => {
   // Bulk Multi-Product Stock Addition Submit
   const handleRequestBulkStockAddition = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user?.teamId) {
+      toast.error('Your account is not assigned to a team.');
+      return;
+    }
 
     const itemsToAdd = products
       .filter((p) => (bulkQuantities[p.id] || 0) > 0)
@@ -154,7 +157,7 @@ export const SupervisorStockPage: React.FC = () => {
         requestType: 'STOCK_ADDITION',
         requestedById: user.id,
         requestedByName: user.fullName,
-        teamId: user.teamId || 'team_001',
+        teamId: user.teamId,
         productId: itemsToAdd[0]?.productId || undefined as any,
         productName: `Bulk Stock Addition (${itemsToAdd.length} Products, +${totalQty} Units)`,
         items: itemsToAdd,
@@ -175,7 +178,11 @@ export const SupervisorStockPage: React.FC = () => {
   // Supervisor requests stock addition with batch cost & pricing mode
   const handleRequestStockAddition = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stockModalProduct || !user || addQty <= 0) return;
+    if (!stockModalProduct || addQty <= 0) return;
+    if (!user?.teamId) {
+      toast.error('Your account is not assigned to a team.');
+      return;
+    }
 
     setIsSubmittingStock(true);
     try {
@@ -183,7 +190,7 @@ export const SupervisorStockPage: React.FC = () => {
         requestType: 'STOCK_ADDITION',
         requestedById: user.id,
         requestedByName: user.fullName,
-        teamId: user.teamId || 'team_001',
+        teamId: user.teamId,
         productId: stockModalProduct.id,
         productName: stockModalProduct.name,
         oldValue: Number(stockModalProduct.currentStock),
@@ -211,7 +218,11 @@ export const SupervisorStockPage: React.FC = () => {
   // Requirement 2.12: Supervisor requests cost/selling price changes (Creates pending ApprovalRequest & sends email notification)
   const handleRequestPriceChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!priceModalProduct || !user) return;
+    if (!priceModalProduct) return;
+    if (!user?.teamId) {
+      toast.error('Your account is not assigned to a team.');
+      return;
+    }
 
     setIsSubmittingPrice(true);
     try {
@@ -229,7 +240,7 @@ export const SupervisorStockPage: React.FC = () => {
           requestType: 'PRODUCT_COST_PRICE_CHANGE',
           requestedById: user.id,
           requestedByName: user.fullName,
-          teamId: user.teamId || 'team_001',
+          teamId: user.teamId,
           productId: priceModalProduct.id,
           productName: priceModalProduct.name,
           oldValue: priceModalProduct.costPrice,
@@ -243,7 +254,7 @@ export const SupervisorStockPage: React.FC = () => {
           requestType: 'PRODUCT_SELLING_PRICE_CHANGE',
           requestedById: user.id,
           requestedByName: user.fullName,
-          teamId: user.teamId || 'team_001',
+          teamId: user.teamId,
           productId: priceModalProduct.id,
           productName: priceModalProduct.name,
           oldValue: priceModalProduct.sellingPrice,

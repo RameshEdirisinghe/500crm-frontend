@@ -55,23 +55,33 @@ npm run build
 
 ## Backend API & Cookie Authentication
 
-Browser API calls are same-origin and relative:
+Browser API calls use the configured API origin:
 
 ```ts
 axios.create({
-  baseURL: "/api/v1",
+  baseURL: env.apiBaseUrl,
   withCredentials: true,
 });
 ```
 
-On Vercel, `/api/*` is rewritten externally to `https://api.500crm.residuesolution.io/api/*`. In local development, Vite proxies `/api` to `http://localhost:3000`.
+Configure:
+
+```env
+API_BASE_URL=http://localhost:3000/api/v1
+```
+
+Local development calls the NestJS API directly. Vercel production builds use a same-origin relative path, which Vercel proxies to the physical backend.
+
+Vercel Project Settings -> Environment Variables:
+
+- `API_BASE_URL`: `/api/v1` (embedded in browser build)
 
 Current production topology:
 
-- Frontend: `https://500crm-frontend.vercel.app`
-- Backend: `https://api.500crm.residuesolution.io`
+- Frontend: `https://500-labs-crm-client.vercel.app`
+- Backend rewrite proxy: `/api/v1` -> `https://api.500crm.residuesolution.io/api/v1`
 
-The browser must not call `api.500crm.residuesolution.io` directly. JWTs are stored only in backend-set HttpOnly cookies scoped to the frontend origin through the rewrite response; frontend code must not read cookies, attach Bearer tokens, or store JWTs in `localStorage`/`sessionStorage`.
+Browser calls `/api/v1` on the frontend origin, ensuring same-origin cookie delivery and avoiding cross-site cookie restrictions on mobile browsers. Cookies are configured with `SameSite=Lax` and `Secure=true`.
 
 ---
 

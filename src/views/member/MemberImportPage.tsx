@@ -710,7 +710,7 @@ export const MemberImportPage: React.FC = () => {
                   disabled={totalSelectedToImport === 0}
                   className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 font-bold text-xs sm:text-sm cursor-pointer shadow-xs"
                 >
-                  Confirm &amp; Import Contacts
+                  Confirm
                 </Button>
               </div>
             </div>

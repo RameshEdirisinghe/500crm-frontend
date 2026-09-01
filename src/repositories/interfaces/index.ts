@@ -38,6 +38,7 @@ export interface IUserRepository {
   getBySupervisorId(supervisorId: string): Promise<User[]>;
   create(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
   update(id: string, updates: Partial<User>): Promise<User>;
+  updateMe(updates: Partial<User>): Promise<User>;
   disable(id: string): Promise<void>;
 }
 

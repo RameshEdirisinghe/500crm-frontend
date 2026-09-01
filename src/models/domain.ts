@@ -28,16 +28,18 @@ export type EmailNotificationStatus = 'SENT' | 'SKIPPED' | 'FAILED';
 export type DeliveryMethod = 'POST' | 'ROYAL_COURIER';
 
 export interface Team {
-  id: string; // e.g., 'team_001', 'team_002'
-  name: string; // e.g., 'Easy Method English', 'Grow Mart'
-  code: string; // e.g., 'EME', 'GM'
+  id: string;
+  name: string;
+  code: string;
   brandColor: string; // Hex color for branding
   accentColor: string;
   logoText: string;
   contactEmail: string;
   contactPhone: string;
   address: string;
+  isActive?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface User {
@@ -60,7 +62,7 @@ export interface User {
   incentiveAmount?: number; // Calculated incentive amount
   isActive: boolean;
   createdAt: string;
-  team?: Pick<Team, 'id' | 'name' | 'code'>;
+  team?: Team | null;
 }
 
 export interface Contact {
@@ -86,6 +88,8 @@ export interface Contact {
   attemptCount: number;
   lastCalledAt: string | null;
   isFollowUp?: boolean; // Starred for Follow-Up List
+  callLogs?: CallLog[];
+  customers?: Customer[];
   updatedAt: string;
 }
 
@@ -132,6 +136,7 @@ export interface DuplicatePhoneCheckResult {
   exists: boolean;
   isOwnedBySelf: boolean;
   message?: string;
+  contact?: Contact;
   intelligence?: DuplicatePhoneIntelligence;
 }
 
@@ -141,6 +146,7 @@ export interface CallLog {
   teamMemberId: string;
   teamId: string;
   status: ContactStatus;
+  direction?: 'OUTBOUND' | 'INBOUND';
   customerName?: string;
   customerAddress?: string;
   customerEmail?: string;
@@ -186,6 +192,7 @@ export interface Customer {
   teamId: string;
   responsibleTeamMemberId: string;
   supervisorId: string;
+  team?: Team;
   contact?: Contact;
   createdAt: string;
   updatedAt: string;
@@ -254,7 +261,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   customer?: Customer;
-  team?: Pick<Team, 'id' | 'name' | 'code'>;
+  team?: Team;
 }
 
 export interface DeliveryStatusHistory {
@@ -397,6 +404,7 @@ export interface Product {
   isActive: boolean;
   batches?: StockBatch[];
   priceHistory?: ProductPriceHistory[];
+  team?: Team;
   createdAt: string;
   updatedAt: string;
 }

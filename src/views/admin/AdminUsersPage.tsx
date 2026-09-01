@@ -3,7 +3,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { User, UserRole, Team } from '../../models/domain';
 import { userRepository, teamRepository } from '../../repositories';
 import { UserService } from '../../services/userService';
-import { PREDEFINED_TEAMS } from '../../config/branding';
 import { PageHeader } from '../../components/shared/PageHeader';
 import { SearchInput } from '../../components/shared/SearchInput';
 import { Button } from '../../components/ui/Button';
@@ -285,7 +284,7 @@ export const AdminUsersPage: React.FC = () => {
                   </span>
                 </td>
                 <td className="py-3.5 px-4 text-xs text-slate-600">
-                  {u.teamId ? teamsMap[u.teamId]?.name || PREDEFINED_TEAMS[u.teamId]?.name || u.teamId : 'System Wide'}
+                  {u.team?.name || (u.teamId ? teamsMap[u.teamId]?.name || u.teamId : 'System Wide')}
                 </td>
                 <td className="py-3.5 px-4 text-xs font-mono text-slate-800">
                   {u.phone}
@@ -419,14 +418,7 @@ export const AdminUsersPage: React.FC = () => {
               label="Assigned Brand / Team *"
               value={teamId}
               onChange={(e) => setTeamId(e.target.value)}
-              options={
-                teams.length > 0
-                  ? teams.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))
-                  : [
-                      { value: 'team_001', label: 'Easy Method English (Team 1)' },
-                      { value: 'team_002', label: 'Grow Mart (Team 2)' },
-                    ]
-              }
+              options={teams.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
             />
           )}
 

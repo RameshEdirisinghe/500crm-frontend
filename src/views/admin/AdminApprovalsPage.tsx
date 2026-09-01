@@ -242,7 +242,7 @@ export const AdminApprovalsPage: React.FC = () => {
                 ) : (
                   filteredRequests.map((req) => {
                     const teamInfo = teams.find((t) => t.id === req.teamId);
-                    const brand = getTeamBranding(req.teamId);
+                    const brand = getTeamBranding(teamInfo);
 
                     return (
                       <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">

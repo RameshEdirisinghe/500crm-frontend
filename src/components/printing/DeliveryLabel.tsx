@@ -10,7 +10,7 @@ export interface DeliveryLabelProps {
 }
 
 export const DeliveryLabel: React.FC<DeliveryLabelProps> = ({ order, customer, className = '' }) => {
-  const teamBrand = getTeamBranding(order.teamId);
+  const teamBrand = getTeamBranding(order.team);
 
   return (
     <div

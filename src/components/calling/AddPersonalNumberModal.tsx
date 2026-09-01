@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { Contact } from '../../models/domain';
 import { useAuth } from '../../hooks/useAuth';
 import { contactRepository } from '../../repositories';
 import { ActivityLogService } from '../../services/activityLogService';
@@ -12,12 +13,14 @@ export interface AddPersonalNumberModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenExistingCallback?: (contact: Contact) => void;
 }
 
 export const AddPersonalNumberModal: React.FC<AddPersonalNumberModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  onOpenExistingCallback,
 }) => {
   const { user } = useAuth();
   const [step, setStep] = useState<'DETAILS' | 'CONFIRM_CODE'>('DETAILS');
@@ -27,6 +30,8 @@ export const AddPersonalNumberModal: React.FC<AddPersonalNumberModalProps> = ({
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [existingContact, setExistingContact] = useState<Contact | null>(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
 
   const resetForm = () => {
     setStep('DETAILS');
@@ -36,7 +41,38 @@ export const AddPersonalNumberModal: React.FC<AddPersonalNumberModalProps> = ({
     setCode('');
     setCodeError('');
     setIsSubmitting(false);
+    setExistingContact(null);
+    setIsCheckingDuplicate(false);
   };
+
+  // Debounced duplicate detection
+  React.useEffect(() => {
+    const clean = phone.replace(/[^0-9+]/g, '');
+    if (clean.length >= 7 && user) {
+      const timer = setTimeout(async () => {
+        setIsCheckingDuplicate(true);
+        try {
+          const res = await contactRepository.checkDuplicate({
+            phone: clean,
+            memberId: user.id,
+            teamId: user.teamId || undefined,
+          });
+          if (res.exists && res.isOwnedBySelf && res.contact) {
+            setExistingContact(res.contact);
+          } else {
+            setExistingContact(null);
+          }
+        } catch {
+          setExistingContact(null);
+        } finally {
+          setIsCheckingDuplicate(false);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setExistingContact(null);
+    }
+  }, [phone, user]);
 
   const handleClose = () => {
     if (!isSubmitting) {
@@ -54,6 +90,11 @@ export const AddPersonalNumberModal: React.FC<AddPersonalNumberModalProps> = ({
     // Validation: Phone format
     if (!cleanPhone || cleanPhone.length < 7) {
       toast.error('Please enter a valid phone number (at least 7 digits).');
+      return;
+    }
+
+    if (existingContact) {
+      toast.error('This number is already in your contacts list. Click "Open to Log Inbound Callback" to update its status.');
       return;
     }
 
@@ -160,6 +201,39 @@ export const AddPersonalNumberModal: React.FC<AddPersonalNumberModalProps> = ({
             required
             autoFocus
           />
+
+          {/* Detected Existing Contact Banner */}
+          {existingContact && (
+            <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3.5 space-y-2.5 shadow-2xs animate-in fade-in duration-150">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Contact already exists in your queue!</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-800 mt-1 flex items-center gap-2 flex-wrap">
+                    <span>Current Status: <strong className="uppercase">{existingContact.status}</strong></span>
+                    <span>&bull; Attempts: <strong>{existingContact.attemptCount || 0}</strong></span>
+                    {existingContact.city && <span>&bull; City: <strong>{existingContact.city}</strong></span>}
+                  </div>
+                </div>
+              </div>
+              {onOpenExistingCallback && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    handleClose();
+                    onOpenExistingCallback(existingContact);
+                  }}
+                  className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                >
+                  Open to Log Inbound Callback &amp; Update Status
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input

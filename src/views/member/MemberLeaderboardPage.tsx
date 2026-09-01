@@ -13,7 +13,11 @@ export const MemberLeaderboardPage: React.FC = () => {
     const loadLeaderboard = async () => {
       setLoading(true);
       try {
-        const currentTeamId = user?.teamId || 'team_001';
+        const currentTeamId = user?.teamId;
+        if (!currentTeamId) {
+          setItems([]);
+          return;
+        }
         const [teamUsers, allOrders] = await Promise.all([
           userRepository.getByTeamId(currentTeamId),
           orderRepository.getByTeamId(currentTeamId),
